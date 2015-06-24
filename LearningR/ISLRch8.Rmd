@@ -1,0 +1,74 @@
+Decision Trees
+===================================
+
+We'll have a look at the `Carseats` data using the `tree` package in R, as in the lab in the book. We create a binary response variable `High` (for high sales), and we include it in the same dataframe
+
+```{r}
+require(ISLR)
+require(tree)
+attach(Carseats)
+hist(Sales)
+High=ifelse(Sales<=8,"No","Yes")
+Carseats=data.frame(Carseats,High)
+```
+Now we fit a tree to these data and summarize and plot it. Notice that we have to _exclude_ `Sales` from the right-hand side of the formula, because the response is derived from it.
+```{r}
+tree.carseats=tree(High~.-Sales,data=Carseats)
+summary(tree.carseats)
+plot(tree.carseats)
+text(tree.carseats,pretty=0)
+```
+for a detailed summary of a tree, print it
+```{r}
+tree.carseats
+```
+Let's create a training and test set (250,150) split of the 400 observations, grow the tree on the training set, and evaluate it's performance on the test set.
+```{r}
+set.seed(1001)
+train=sample(1:nrow(Carseats),250)
+tree.carseats=tree(High~.-Sales,Carseats,subset=train)
+plot(tree.carseats);text(tree.carseats,pretty=0)
+tree.pred=predict(tree.carseats,Carseats[-train,],type="class")
+with(Carseats[-train,],table(tree.pred,High))
+(71+39)/150
+```
+This tree was grown to full depth and might be too variable. We now use CV to prune it.
+```{r}
+cv.carseats=cv.tree(tree.carseats,FUN=prune.misclass)
+cv.carseats
+plot(cv.carseats)
+prune.carseats=prune.misclass(tree.carseats,best=15)
+plot(prune.carseats);text(prune.carseats,pretty=0)
+```
+Now let's evaluate this pruned tree on the test data.
+```{r}
+tree.pred=predict(prune.carseats,Carseats[-train,],type="class")
+with(Carseats[-train,],table(tree.pred,High))
+(74+38)/150
+```
+It has done about the same as our original tree, So pruning did not hurt - helped a bit and gave us a simpler tree.
+
+Random Forests and Boosting
+==================================
+
+These methods use trees as building blocks to build more complex models. Here we will use the Boston Housing Data to explore random forests and boosting. These data are in the `MASS` package.
+
+It gives housing values and other statistics in each of 506 suburbs of Boston based on a 1970 census.
+
+Random Forests
+------------------
+Random forests build lots of bushy trees and then average them to reduce the variance.
+```{r}
+require(randomForest)
+require(MASS)
+set.seed(101)
+dim(Boston)
+train=sample(1:nrow(Boston),300)
+?Boston
+```
+Let's fit a random forest and see how well it performs. We will use the response `medv`, the median housing value (in \$1K dollars)
+
+```{r}
+rf.boston=randomForest(medv~.,data=Boston,subset=train)
+rf.boston
+```

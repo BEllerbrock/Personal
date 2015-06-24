@@ -1,0 +1,62 @@
+Nonlinear Models
+--------------------------------------------
+Here we explore the use of nonlinear models using some tools in R
+
+```{r}
+require(ISLR)
+attach(Wage)
+```
+
+Polynomials
+----------------------
+First we will use polynomials and focus on a single predictor, age:
+
+```{r}
+fit=lm(wage~poly(age,4),data=Wage)
+summary(fit)
+```
+Let's make a plot of the fitted function, along with the standard errors of the fit
+
+```{r fig.width=7, fig.height=6}
+agelims=range(age)
+age.grid=seq(from=agelims[1],to=agelims[2])
+preds=predict(fit,newdata=list(age=age.grid),se=TRUE)
+se.bands=cbind(preds$fit+2*preds$se,preds$fit-2*preds$se)
+plot(age,wage,col="darkgrey")
+lines(age.grid,preds$fit,lwd=2,col="blue")
+matlines(age.grid,se.bands,col="blue",lty=2)
+```
+There are more direct ways of doing this in R. For example
+```{r}
+fita=lm(wage~age+I(age^2)+I(age^3)+I(age^4),data=Wage)
+summary(fita)
+summary(fit)
+plot(fitted(fita),fitted(fit))
+```
+Using orthoganol polynomials this way means we can separately test for each coefficient, and determine for example
+that while the first three terms are significant, the quadratic is not and is therefore not needed
+
+This only works for linear regression, and if there is a single predictor. In general we would use `anova()` as in this 
+example
+
+```{r}
+fita=lm(wage~education,data=Wage)
+fitb=lm(wage~education+age,data=Wage)
+fitc=lm(wage~education+poly(age,2),data=Wage)
+fitd=lm(wage~education+poly(age,3),data=Wage)
+anova(fita,fitb,fitc,fitd)
+```
+### Polynomial logistic regression
+
+Now we fit a logistic regression model to a binary response variable, constructed from `wage`. We code the big earners (`>250k`) as 1, else 0. 
+
+```{r}
+fit=glm(I(wage>250)~poly(age,3),data=Wage,family=binomial)
+summary(fit)
+preds=predict(fit,list(age=age.grid),se=T)
+se.bands=preds$fit+cbind(fit=0,lower=-2*preds$se,upper=2*preds$se)
+se.bands[1:5,]
+prob.bands=exp(se.bands)/(1+exp(se.bands))
+summary(prob.bands)
+matplot(age.grid,prob.bands,col="blue",lwd=c(2,1,1),lty=c(1,2,2),type="l",ylim=c(0,.1))
+points(jitter(age),I(wage>250)/10,pch="|",cex=.5)
