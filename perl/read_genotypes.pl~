@@ -1,0 +1,19 @@
+!#/usr/bin/perl 
+
+use warnings;
+use strict;
+
+my $file = 'genotypes.txt';
+my $counter = 0;
+open(FILE, $file) || die "Can't find file $file \n";
+
+while (<FILE>) {
+    #chomp;
+    $counter++;
+    print $_ . "line number = $counter \n";
+    if ($counter == 10) { return;}
+}
+    
+    
+    
+    

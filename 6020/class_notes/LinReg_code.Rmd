@@ -1,0 +1,397 @@
+---
+title: "R Code For Simple Linear Regression"
+output:
+  pdf_document: default
+html_document:
+  highlight: pygments
+theme: cerulean
+word_document: default
+---
+
+
+# The Heart Data 
+  
+The heart data measure height (in) and weight (lb) of 12 children. These data also record the 
+arterial distance to their heart.  These data wree taken in order to improve the insertion of 
+stents to treat a number of heart problems. For our purposes today, we will just look at the 
+relationship between height and weight. 
+
+First, we must load in the data. If you have downloaded heart.txt from the blackboard site
+and put it into your working directory, you can proceed with. 
+```{r,echo=TRUE}
+heart = read.table('heart.txt',head=TRUE)
+```
+If you examine this, we can look at 
+```{r, echo=TRUE}
+heart
+```
+Where we see the column names and the data. You can access a column by
+```{r, echo=TRUE}
+heart$weight
+```
+You can also access the second entry in the third row by
+```{r, echo=TRUE}
+heart[3,2]
+```
+Or the whole of the third row by
+```{r, echo=TRUE}
+heart[3,]
+```
+
+Now we will plot the data; making the axes and labels a bit larger and adding a line 
+of best fit. 
+```{r, echo=TRUE}
+plot(heart$height,heart$weight,cex.axis=1.5,cex.lab=2,cex=1.5,col=4,pch=8)
+abline(lm(heart$weight~heart$height)$coef)
+```
+
+From Silde 7 in Lecture 2, here are the calculations to get us to correlation
+
+```{r, echo=TRUE, results='markup'}
+# Average value of weight
+m.weight = mean(heart$weight)
+m.weight
+
+# Average value of height
+m.height = mean(heart$height)
+m.height
+
+# Variance of weight
+var.weight = var(heart$weight)
+var.weight
+
+# Variance of height
+var.height = var(heart$height)
+var.height
+
+# Covariance between them
+cov.heart = cov(heart$height,heart$weight)
+cov.heart 
+
+# Formula for correlation
+cor.heart = cov.heart/sqrt( var.height * var.weight )
+cor.heart
+
+# Just using the correlation function gets you there directly
+cor.heart2 = cor(heart$height,heart$weight)
+cor.heart2
+```
+
+
+# Illustrating a Statistical Model with Made Up Data
+
+In this section we will use made-up data (so we know what the truth is) to illustrate the 
+statistical properties of the simple linear model and its estimation. 
+
+## Setting up a linear model
+We will start by setting up the linear model
+$$ 
+Y_i = \beta_0 + \beta_1 X_i + \epsilon_i
+$$
+We will start off by specifying $\beta_0$, $\beta_1$ and the error standard
+deviation $\sigma$:
+
+```{r,echo=TRUE}
+beta0 = 0;   beta1 = 1; sigma = 0.25
+```
+We will then take $X$ to be spaced from 0 to 1 in intervals of 0.1
+```{r,echo=TRUE}
+X = seq(0,1,by=0.1)
+X
+```
+and generate the $\epsilon_i$ from a normal distribution with standard deviation $\sigma$:
+```{r,echo=TRUE}
+epsilon = rnorm(11,mean=0,sd=sigma)
+epsilon
+```
+We can now generate response values
+```{r,echo=TRUE}
+Y = beta0 + beta1*X + epsilon
+Y
+```
+and plot these
+```{r,echo=TRUE}
+plot(X, Y,pch='*',lwd=2,col='blue',xlab='X',ylab='Y',
+    main=expression(Y==beta[0]+beta[1] * X+epsilon),
+    cex.lab=1.5,cex.axis=1.5,cex.main=1.5,cex=3)
+
+abline(c(beta0,beta1),lwd=2,col='blue')
+```
+## Estimating parameters from data
+
+We can estimate parameters from data using the lm function
+
+```{r,echo=TRUE}
+mod = lm(Y~X)
+mod$coefficients    # 'truth' is 0 and 1
+```
+and add this line to the plot
+```{r,echo=TRUE}
+plot(X, Y,pch='*',lwd=2,col='blue',xlab='X',ylab='Y',
+    main=expression(Y==beta[0]+beta[1] * X+epsilon),
+    cex.lab=1.5,cex.axis=1.5,cex.main=1.5,cex=3)
+
+abline(c(beta0,beta1),lwd=2,col='blue')
+
+abline(mod,lty=2,lwd=2,col='red')
+```
+
+## Looking at some diagnostics
+We can obtain studentized residuals from the MASS packages
+```{r,echo=TRUE}
+library('MASS')
+
+s.resid = studres(mod)
+
+plot(s.resid)
+````
+
+It also makes some sense to plot studentized residuals versus fitted values
+```{r,echo=TRUE}
+plot(mod$fit,s.resid)
+````
+
+We can also plot Cook's distance
+```{r,echo=TRUE}
+plot(X,cooks.distance(mod))
+````
+
+To see what happens for influential points, we'll create an outlier artificially
+
+```{r,echo=TRUE}
+Y[3] = 1
+
+plot(X, Y,pch='*',lwd=2,col='blue',xlab='X',ylab='Y',
+    main=expression(Y==beta[0]+beta[1] * X+epsilon),
+    cex.lab=1.5,cex.axis=1.5,cex.main=1.5,cex=3)
+```
+And estimate a linear model with these data, adding the best fit line to the plot
+```{r,echo=TRUE}
+mod = lm(Y~X)
+mod$coefficients    # 'truth' is 0 and 1
+``` 
+and add this to the plot too
+```{r,echo=TRUE}
+plot(X, Y,pch='*',lwd=2,col='blue',xlab='X',ylab='Y',
+    main=expression(Y==beta[0]+beta[1] * X+epsilon),
+    cex.lab=1.5,cex.axis=1.5,cex.main=1.5,cex=3)
+
+abline(mod,lty=2,lwd=2,col='red')
+```
+We'll also look at the line that results when we don't include the outlier in the
+data set. To do this, we have
+```{r,echo=TRUE}
+mod.red = lm(Y[-3]~X[-3])
+summary(mod.red)
+```
+```{r,echo=FALSE}
+plot(X, Y,pch='*',lwd=2,col='blue',xlab='X',ylab='Y',
+    main=expression(Y==beta[0]+beta[1] * X+epsilon),
+    cex.lab=1.5,cex.axis=1.5,cex.main=1.5,cex=3)
+
+abline(mod,lty=2,lwd=2,col='red')
+abline(mod.red,lty=3,lwd=2,col='blue')
+```
+In this case, studentized residuals and Cooks distance ought to pick out the outlier
+```{r,echo=TRUE}
+plot(mod$fit,studres(mod))
+
+plot(X,cooks.distance(mod))
+```
+
+## Computing Confidence Intervals
+
+First we need toestimate the variance
+```{r,echo=TRUE,results='markup'}
+sig.hat = sum( mod$resid^2 )/9
+```
+and obtain the sum of squares for $X$:
+```{r,echo=TRUE}
+SXX = sum( (X-mean(X))^2 )
+```
+Then plug these into the variance expressions
+```{r,echo=TRUE,results='markup'}
+sd.beta1 = sqrt(sig.hat/SXX)
+sd.beta0 = sqrt(sd.beta1^2 * mean( X^2 ))
+```
+To obtain confidence intervals, we take the estimate plus and minus variance times 
+the critical value of t-distribution (qt gives the quantiles of the t distribution)
+```{r,echo=TRUE,results='markup'}
+c( mod$coef[1] - qt(0.975,9)*sd.beta0,mod$coef[1] + qt(0.975,9)*sd.beta0 )
+c( mod$coef[2] - qt(0.975,9)*sd.beta1,mod$coef[2] + qt(0.975,9)*sd.beta1 )
+```
+
+We can do this much more easily using the confint function:
+```{r,echo=TRUE,results='markup'}
+confint(mod)
+```
+
+## A Simulation
+
+All of statistical inference is really asking the question "What would happen if we
+ran the experiment again?". When we are generating the data, we can! 
+
+To run a simulation first we will define some arrays to hold the simulation values.
+
+coefmat is a 1000-by-2 array to hold the two coefficients, $\beta_0$ and $\beta_1$ 
+for each of the 1000 simulations
+```{r}
+coefmat = matrix(0,1000,2)
+```
+We will also produce a 1000-by-11 array to hold the fitted values for each simulation
+```{r}
+predmat = matrix(0,1000,11)
+```
+Now we will repeat the above 1000 times:
+```{r,echo=TRUE,results='hide'}
+for(sim in 1:1000){
+  epsilon = rnorm(11,mean=0,sd=sigma) # New observation errors
+  Y =  beta0 + beta1*X + epsilon      # New response values
+
+  mod = lm(Y~X)                       # Refit the model
+  coefmat[sim,] = mod$coefficients    # Store fitted coefs
+
+  predmat[sim,] = mod$fit             # Store fitted values
+}
+```
+Now we look at the results. First histograms of the coefficients
+```{r,echo=TRUE}
+hist(coefmat[,1],prob=TRUE,xlab=expression(beta[0]),main='',cex.lab=1.5,cex.axis=1.5)
+hist(coefmat[,2],prob=TRUE,xlab=expression(beta[1]),main='',cex.lab=1.5,cex.axis=1.5)
+```
+Which look reasonably normal. Lets have a look at the variance of each of these
+```{r,echo=TRUE,results='markup'}
+var(coefmat[,1])
+var(coefmat[,2])
+```
+Ideally, the formulae that we saw in class will be pretty close to this (remeber that
+the results of the simulation are still random). 
+```{r,echo=TRUE,results='markup'}
+var.beta1 = sigma^2/SXX
+var.beta1
+
+var.beta0 = var.beta1 * mean( X^2 )
+var.beta0
+```
+To make this concrete, we will plot all 1000 estimated regression lines
+```{r,echo=TRUE}
+plot(X,beta0+beta1*X,ylab='Y',cex.lab=1.5,cex.axis=1.5)
+for(i in 1:1000){ lines(X,predmat[i,],col='red') }
+abline(c(beta0,beta1),col='blue',lwd=3)
+```
+and add in the true line $\pm$ confidence and prediction intervals.
+The variance of the fitted values is 
+```{r,echo=TRUE,result='markup'}
+var.pred = sigma^2*(1/11 + (X - mean(X))^2/SXX)
+```
+and we can 1.96 times the standard deviation of these fitted values to the plot
+```{r,echo=TRUE}
+plot(X,beta0+beta1*X,ylab='Y',cex.lab=1.5,cex.axis=1.5)
+for(i in 1:1000){ lines(X,predmat[i,],col='red') }
+abline(c(beta0,beta1),col='blue',lwd=3)
+lines(X,beta0+beta1*X + 1.96 * sqrt(var.pred), lty=2,lwd=3,col='blue')
+lines(X,beta0+beta1*X - 1.96 * sqrt(var.pred), lty=2,lwd=3,col='blue')
+```
+The variance of a new point is the variance of the fitted value plus the standard
+deviation, so we can add prediction intervals this way
+```{r,echo=TRUE}
+plot(X,beta0+beta1*X,ylab='Y',cex.lab=1.5,cex.axis=1.5)
+for(i in 1:1000){ lines(X,predmat[i,],col='red') }
+abline(c(beta0,beta1),col='blue',lwd=3)
+
+lines(X,beta0+beta1*X + 1.96 * sqrt(var.pred), lty=2,lwd=3,col='blue')
+lines(X,beta0+beta1*X - 1.96 * sqrt(var.pred), lty=2,lwd=3,col='blue')
+
+lines(X,beta0+beta1*X + 1.96 * sqrt(sigma^2+var.pred), lty=3,lwd=3,col='blue')
+lines(X,beta0+beta1*X - 1.96 * sqrt(sigma^2+var.pred), lty=3,lwd=3,col='blue')
+```
+
+# Food pH data
+
+The food data give the time that food has been allowed to sit and the corresponding 
+pH values measured. We obtain these data by the following read-out
+```{r,echo=TRUE}
+food = c(1,1,2,2,4,4,6,6,8,8,7.02,6.93,6.42,6.51,6.07,5.99,5.59,5.8,5.51,5.36)
+food = data.frame(matrix(food,10,2))
+names(food) = c("time","pH")
+```
+Looking at it:
+```{r,echo=TRUE,results='markup'}
+print(food)
+````
+We can work out regression coefficients manually (from Lecture 2 slides):
+```{r,echo=TRUE,results='markup'}
+m.time = mean(food$time)   # Average time
+m.pH = mean(food$pH)       # Average pH
+
+s.time = sum( (food$time-m.time)^2 )   # S_X for time
+s.timepH = sum( (food$time-m.time)*(food$pH-m.pH) )  # S_XY
+
+beta1 =   s.timepH/s.time        # slope
+beta0 =   m.pH - beta1*m.time    #intercept
+```
+Alternatively we simply call lm:
+```{r,echo=TRUE}
+food.mod = lm(pH~time,data=food)
+food.mod$coefficients
+```
+
+We are interested in the value where the slope rosses pH = 6
+```{r,echo=TRUE,results='markup'}
+t = (6 - beta0)/beta1
+```
+Now plot the data and the regression
+```{r,echo=TRUE}
+plot(food$time,food$pH,cex.lab=1.5,cex.axis=1.5,col=4,main='food Data',cex=1.5,pch=8)
+abline(food.mod)
+abline(h=6)
+```
+We can also plot residuals
+```{r,echo=TRUE}
+plot(food.mod$resid,pch=8,cex=2,col='blue')
+abline(h = 0)
+```
+And we can look at the summary of the fitted model
+```{r,echo=TRUE}
+summary(food.mod)
+```
+## Fitting to $log(X)$ instead
+
+First a plot of Y against log(X)
+```{r,echo=TRUE}
+plot(log(food$time),food$pH,cex.lab=1.5,cex.axis=1.5,col=4,main='food Data',cex=1.5,pch=8)
+```
+Estimate this model
+```{r,echo=TRUE}
+food.mod2 = lm(pH~log(time),data=food)
+
+plot(log(food$time),food$pH,cex.lab=1.5,cex.axis=1.5,col=4,main='food Data',cex=1.5,pch=8)
+abline(food.mod2)
+abline(h=6)
+```
+We can obtained confidence intervals at the time points in the 
+data set from the predict function:
+  
+```{r,echo=TRUE}
+CIvals = predict(food.mod2,food,interval='confidence')
+```
+Note that CIvals has three colums -- the fit, and the lower and upper values for the 
+confidence intervals. Plot these
+```{r,echo=TRUE}
+plot(log(food$time),food$pH,cex.lab=1.5,cex.axis=1.5,col=4,main='food Data',cex=1.5,pch=8)
+abline(food.mod2)
+abline(h=6)
+lines(log(food$time),CIvals[,2],col='red')
+lines(log(food$time),CIvals[,3],col='red')
+```
+We can also use predict to obtain prediction intervals and add these to the plot
+```{r,echo=TRUE}
+plot(log(food$time),food$pH,cex.lab=1.5,cex.axis=1.5,col=4,main='food Data',cex=1.5,pch=8)
+abline(food.mod2)
+abline(h=6)
+lines(log(food$time),CIvals[,2],col='red')
+lines(log(food$time),CIvals[,3],col='red')
+PIvals = predict(food.mod2,food,interval='prediction')
+lines(log(food$time),PIvals[,2],lty=2,col='red')
+lines(log(food$time),PIvals[,3],lty=2,col='red')
+```

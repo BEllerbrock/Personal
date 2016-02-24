@@ -1,0 +1,481 @@
+---
+title: "Lab 2 - Model Building, Model Checking, and Baseball Salaries"
+output:
+  pdf_document: default
+  html_document:
+    highlight: pygments
+    theme: cerulean
+  word_document: default
+---
+-----
+
+# Lab Goals
+
+In this lab we will look at the relationship between the performance statistics and contract status of baseball player and his annual salary using multiple linear regression (MLR).  This analysis will explore the following in the context of a MLR framework.
+
+  1. model construction
+
+  2. model checking
+    
+  3. hypothesis testing
+    
+
+# Baseball Data
+
+The data file *bball.csv* can be found in the folder Lab 2.  A subset of the variables in this data set can be classified as either **Performance Statistics** or **Contractual Statistics**.  We will consider 9 of these variables as possible *independent variables* or *covariates* in a MLR model. The data set also includes the dependent variable for the model, `salary`.  All variables except for the contractural statistics are continuous.  All contractural statistics are binary.  Here is a list of the ten variables we will consider in this data set with a description of each variable.  
+
++------------------+----------------------------------------------+
+|   Variable       |         Description                          |
++==================+==============================================+
+|   `salary`       |  annual salary in thousands of dollars       |
++------------------+----------------------------------------------+
+|  `bat.av`        |  batting average                             |
++------------------+----------------------------------------------+
+|  `on.base`       | on base percentage                           |
++------------------+----------------------------------------------+
+| `runs`           |  number of runs                              | 
++------------------+----------------------------------------------+
+|  `home.runs`     |  number of home runs                         |
++------------------+----------------------------------------------+
+|  `rbi`           |  number of runs batted in                    |
++------------------+----------------------------------------------+
+| `free.elig`      |  free agent eligibility, 1 = Yes, 0 = No     |
++------------------+----------------------------------------------+
+| `free.agent`     |  free agent?, 1 = Yes, 0 = No                |                 
++------------------+----------------------------------------------+
+| `arb.elig`       |  arbitration eligibility, 1 = Yes, 0 = No    |                
++------------------+----------------------------------------------+
+| `arb`            |  arbitration?, 1 = Yes, 0 = No               |
++------------------+----------------------------------------------+
+
+Load this data set both into the console below and in this R Markdown document using the code chunk provided for you.  
+
+```{r}
+bball <- read.csv("~/Personal/6020/labs/bball.csv", header=TRUE) 
+summary(bball)
+```
+
+This document includes R code that will help us analyze the baseball data.  Knit this document now to get a pdf of this document with all of the R code evaluated.  
+
+
+## Examining Distributions - Independent Variables
+
+First, we want to examine the joint distribution of the continuous explanatory variables.  We will use the `corrgram()` function found in the **corrgram** package to create a matrix of scatterplots of all possible pairs of these covariates.  
+
+```{r, eval=TRUE,tidy=TRUE}
+install.packages('corrgram')
+library(corrgram)
+#Vector of variable names
+corrdat = c("bat.av","on.base","runs","home.runs","rbi") 
+#Creates scatterplots of variables in corrdat
+corrgram(bball[,corrdat],panel='panel.pts',diag.panel='panel.density') 
+```
+
+1. The diagonal of this plot includes approximate probability density functions for each continuous independent variable.  Do you see any distributional problems with these data? 
+
+Skewness in homeruns, as well as runs and rbi could be a problem. There also may be significant colinearity between some of the explanatory variables, including homeruns and rbi, and bat av and onbase. 
+
+You can try experimenting with changing the scale of the axes from linear to log.  The following code will look at these distributions on the log scale.
+  
+```{r, eval=TRUE,tidy=TRUE}
+dim(bball)
+#Creating log variables in the dataset
+bball[,19:23] = c(log(bball$bat.av),log(bball$on.base),log(bball$runs),log(bball$home.runs),log(bball$rbi)) 
+#Assigning names to these variables
+names(bball)[19:23] = c('l.bat.av','l.on.base','l.runs','l.home.runs','l.rbi') 
+#Vector of variable names
+corrdat2 = c("l.bat.av","l.on.base","l.runs","l.home.runs","l.rbi") 
+#Creates Scatterplots
+corrgram(bball[,corrdat2],panel='panel.pts',diag.panel='panel.density') 
+```
+  
+2. Does taking the log of the original variables result in less skewness in these distributions? 
+
+The log tranformation doesn't remove the skewness, but it was fairly mild in the first place. we'll make sure to keep an eye on any influential outliers with cook's distance
+
+Zero values in the data are causing some compression in these distributions.  This can be improved by creating new columns using, for example, log(rbi+1) instead of `rbi`. However, since the skewness in the original data appears to be fairly mild we will leave the variables as is. 
+
+The `cor` function in R will create a correlation matrix for these variables.  
+
+```{r, eval=TRUE}
+cor(bball[,corrdat])
+```
+
+3. Which three pairs of variables are most correlated? 
+
+batav and onbase = 0.806
+runs and rbis = 0.833
+homeruns and rbi - 0.877
+
+4. How does this correlation affect the standard errors of the estimated regression coefficients in the MLR model?  
+
+They increase them. Less certainty due to difficulty of separating the influence of these variables leads means higher standard errors 
+
+## Examining Distributions - Response
+
+We now turn to the response, `salary`.  Using the `hist()` function in R, include a code chunk below that creates a histogram of `salary`.  Run the code in the console below.
+
+```{r}
+hist(bball$salary)
+```
+
+1. How would you describe the distribution of `salary`?  Why might this be a problem?
+
+Super skewed to the right. Could cause issues with the distribution of our variables. 
+
+2. How might we transform `salary`? 
+
+A log transformation might solve this problem without reducing interpretability. X change in independent variable suggests X% change in dependent variable
+
+## Initial Model
+
+We will fit an initial model with all the variables without any transformations.  The `lm()` function in R will fit a multiple linear regression model.  It is a good idea to use the `as.factor()` function to denote all of the categorical predictors as factors before running a linear model.  The following code chunk first denotes the categorical predictors as factors and then runs a MLR model with `salary` as the response and the 9 independent variables described above as covariates.  Run this model both in this document by setting `eval=TRUE` and in the R console below.  
+
+```{r,eval=TRUE}
+bball$free.elig<-as.factor(bball$free.elig) 
+bball$free.agent<-as.factor(bball$free.agent)                  
+bball$arb.elig<-as.factor(bball$arb.elig)                    
+bball$arb<-as.factor(bball$arb)    
+bball.lm <- lm(salary~free.elig+free.agent+arb.elig+arb+bat.av+on.base+runs+home.runs+rbi,data=bball)
+```
+
+We were concerned about how the distribution of `salary` might affect the model assumptions.  Here we will check the following assumptions of this model:
+
+  1. normality of error distribution
+  
+  2. homogeneous variance of the error distribution
+  
+The studentized residuals of the model can be obtained using the `studres()` function with the name of the linear model as the argument.  In the code chunk below, we first obtain the studentized residuals. Then we will use both a Q-Q plot and a plot of the residuals against the predicted values to check assumptions (1) and (2) above.  Note: the `studres()` function is found in the `MASS` package and the `qqPlot()` function is found in the `car` package. These packages must be accessed through the `library()` function.
+
+```{r, eval=TRUE}
+library(MASS)
+student.res <- studres(bball.lm)
+library(car)
+qqPlot(student.res)
+plot(bball.lm$fitted.values,student.res)
+abline(0,0)
+```
+
+1.  Looking first at the Q-Q plot, does there seem to be a problem with the normality assumption?  
+
+yes. we are seeing values outside of of expected quantiles based on normality assumption. 
+
+2. Looking at the second plot, does the homogeneous variance assumption seem to be met?
+
+there is increasing variance in the second plot, which means we actually have non-homogenous variance.
+
+Another concern we might have is whether there are any influential points in the data.  The following code stores the Cook's distance for every observation and then creates a plot of the Cook's distances.  Are there any observations that are significantly affecting the model? 
+
+No points are greater than 0.5, there are no concerning influential points
+
+```{r, eval=TRUE}
+#Stores Cook's distances in a vector
+cooks_d = cooks.distance(bball.lm)
+#Creates plot of Cook's distances
+cutoff=1
+plot(bball.lm, which=4, cook.levels=cutoff)
+```
+## New Model
+
+Using the log transformation on the response, `salary`, may fix the violation of assumptions seen above for the MLR model.  Here we will re-run our model using log(salary) as the response instead of `salary`.  The following code will also create a Q-Q plot and a studentized residual by predicted plot for the new model.
+
+```{r, eval=TRUE}
+bball.lm2 <- lm(log(salary)~free.elig+free.agent+arb.elig+arb+bat.av+on.base+runs+home.runs+rbi,data=bball)
+library(MASS)
+student.res2 <-studres(bball.lm2)
+library(car)
+qqPlot(student.res2)
+plot(bball.lm2$fitted.values,student.res2)
+abline(0,0)
+```
+
+1. Any studentized residuals that are greater than 3 in absolute value are an indicative of observations that are outliers.  Looking at the studentized residuals by predicted values plot, are there any outliers?  
+
+yes. Not too many, but I see 4
+
+2. How are the outliers impacting the Q-Q plot and the studentized residuals versus predicted values plot?  
+
+They are ruining otherwise beautiful plots that would otherwise make our model look sexy. Like Aubrey Plaza
+
+These outliers should be examined to determine whether these are data errors that could be corrected or if they should be excluded from the analysis.  We can use the `which()` function to determine which observations are outliers.  We will also take a look at the salaries of the outlying observations. 
+
+```{r, eval=TRUE}
+#Determines which observations have large residuals 
+outliers=which(abs(student.res2)>3) 
+outliers  #Both rows are the observation numbers of the outliers
+bball$salary[outliers] #Salary of outliers
+```
+
+The four large outliers are 205, 268, 284 and 322. When we examine them, they all have salary $109,000: the lowest in the league. We’ll exclude them from the analysis.   Below we will re-run the MLR model with log(salary) as the response without the outliers.  
+
+```{r, eval=TRUE,tidy=TRUE}
+ #Determines observations we want to include
+not_outlier = which(abs(student.res2)<=3)
+
+#Subset option allows only a subset of the data to be analyzed
+bball.lm3 <- lm(log(salary)~free.elig+free.agent+arb.elig+arb+bat.av+on.base+runs+home.runs+rbi,data=bball,subset=not_outlier) 
+
+library(MASS) 
+student.res3 <-studres(bball.lm3)
+library(car)
+qqPlot(student.res3)
+plot(bball.lm3$fitted.values,student.res3)
+abline(0,0)
+```
+
+3. Are the normality and homogeneous variance assumptions now met? 
+
+Looks like it. No evidence of worringly influential points or non-homogenous variance.
+
+## Examining the model
+
+Now we will examine the model run without the outliers using the response log(salary).  A summary of the model can be obtained using the `summary()` function with the name of the linear model as the argument. 
+
+```{r, eval=TRUE}
+summary(bball.lm3)
+```
+
+Looking at the p-values associated with each independent variable, we see that many of the regression coefficients are not determined to be significantly different from zero.  This may be due to the strong correlation we saw above  between several of the independent variables.  The following code uses the `vif()` function to determine the *Variance Inflation Factor* for each independent variable.  Again the argument of this function is the name of your linear model.
+
+```{r, eval=TRUE}
+vif(bball.lm3)
+```
+
+Some of these VIFs are quite large, although the largest is associated with `rbi` which is already strongly significant. Notably, however, `home.runs` is not significant, but does have a high variance inflation factor. We might also consider `bat.av` and `on.base` since we know them to be correlated. 
+
+To further examine which variables might be indistinguishable, we look at the correlation matrix of the parameter estimates. This can be obtained by adding the option `correlation = TRUE` to the summary function for this model.
+
+```{r, eval=TRUE}
+summary(bball.lm3, correlation=TRUE)
+```
+
+This outputs a correlation matrix giving how strongly related two coefficients are. We observe that the coefficient for `home.runs` is strongly correlated with that for `rbi` and that the coefficients for `bat.av` and `on.base` are similarly correlated. 
+
+`home.runs` could be part of the cause of the high VIF for `rbi` so we’ll try removing it. Neither `bat.av` nor `on.base` are significant, but this may be because they are correlated. We’ll try removing `bat.av` since it has the highest p-value. 
+
+As a final note, we want to keep track of sums of squares so that we can compare our reduced model to this one with an F test to see if we have been too aggressive in removing observations. The `anova()` function with the name of the linear model as its argument will provide us with the break down of the sequential sum of squares for the model and the sum of squares for error.  Note that the independent variables are listed in the order in which they were put in the model.
+
+```{r, eval=TRUE}
+anova(bball.lm3)
+```
+
+## Reduced model
+
+When we remove `home.runs` and `bat.av` from the model we find that `on.base` is not significant with a much lower VIF. We therefore also remove it (`arb` is also not significant, but we will consider the contractual variables later). Having removed these from the model, most of the VIFs are fairly reasonable: only `rbi` and `runs` are large, and these variables are significant, anyway. 
+
+
+```{r, eval=TRUE,tidy=TRUE}
+#Determines observations we want to include
+not_outlier = which(abs(student.res2)<=3) 
+#Reduced model
+bball.lm4 <- lm(log(salary)~free.elig+free.agent+arb.elig+arb+runs+rbi,data=bball,subset=not_outlier) 
+summary(bball.lm4)
+vif(bball.lm4)
+```
+
+If we examine the ANOVA table:
+
+```{r, eval=TRUE}
+anova(bball.lm4)
+```
+
+We can test whether there is evidence that this model fits less well than the first. Recall that if Model 2 is nested in Model 1 then the appropriate F statistic is
+
+
+$F^*=\frac{(SSE(Model 2) - SSE(Model 1))/(p2-p1)}{SSE(Model 1)/(n-(p2+1))} = \frac{(74.6-74)/3}{74/323} = 0.87$
+
+```{r,eval=TRUE}
+Fstar = ((74.6-74)/3)/(74/323)
+Fstar
+```
+
+The null hypothesis of this test is that all regression coefficients associated with terms in Model 1 that are not in Model 2 are equal to zero. This statistic can be compared to an F distribution with 3 and 323 degrees of freedom. Here p1 is the number of model df for Model 1 and p2 is the number of model df for Model 2. The 0.05 critical value for the null distribution is 2.63, so there is no evidence that the reduced model fits substantially worse (we fail to reject the null hypothesis).  
+
+We can now examine the residuals. The studentized residual by predicted plot does not produce any obvious problems. 
+
+```{r, eval=TRUE}
+library(MASS)
+student.res4 <-studres(bball.lm4)
+plot(bball.lm4$fitted.values,student.res4)
+abline(0,0)
+```
+
+We also want to look for curvature in the model. We therefore create a new scatterplots of the residuals plotted against each of the continuous explanatory variables . The residuals are output from `lm()` function and can be accessed by using the command `name.lm$residuals` where `name.lm` is the name of your linear model. 
+
+```{r,eval=TRUE}
+res=bball.lm4$residuals #Extracting the residuals
+par(mfrow=c(1,2)) # Includes two plots in one figure
+plot(bball$rbi[not_outlier],res, xlab='rbi',ylab='Residuals')
+plot(bball$runs[not_outlier],res, xlab='runs',ylab='Residuals')
+``` 
+These plots do not appear to show any strong nonlinear effects. 
+
+## Bonus Section: Interactions with Contractual Variables
+
+**It is important to understand how to include and interpret interaction terms in a MLR model.  Please read through the following material on your own if it is not covered in lab.  Questions on this material can  be addressed during office hours.**
+
+Free agent eligibility, being a free agent, arbitration eligibility and going into arbitration are all variables that describe the contractual status of the player. All except arbitration itself appear to play an important role in determining salary. This is unsurprising since this is a time when players can re-negotiate their contracts. An interesting question is whether or not the players’ performance affects their negotiation ability. 
+
+As a first way to examine this, we will re-do the residual by predicted plot, color-coding by contract status.  This plot can be created in a couple of ways.  Here we will consider creating a vector that indicates the contractural status of each player.  We will call this vector `cont.stat`.  
+
+```{r}
+#Note the length of this vector is set to the number of observations in the original dataset
+cont.stat = vector(mode="character",length=dim(bball)[1])
+
+for ( i in 1:length(cont.stat)) {
+  if ((bball$free.elig[i]=="0")&(bball$arb.elig[i]=="0")) {
+    cont.stat[i] = "1"
+  }
+ if ((bball$arb.elig[i]=="1")&(bball$arb[i]=="0")) {
+    cont.stat[i] = "2"
+  } 
+ if ((bball$arb.elig[i]=="1")&(bball$arb[i]=="1")) {
+    cont.stat[i] = "3"
+  } 
+ if ((bball$free.elig[i]=="1")&(bball$free.agent[i]=="0")) {
+    cont.stat[i] = "4"
+  } 
+ if ((bball$free.elig[i]=="1")&(bball$free.agent[i]=="1")) {
+    cont.stat[i] = "5"
+  } 
+}
+```
+
+Indexing is another way to do what the above code does, and it is faster for larger datasets. (Generally, R is slow at looping):
+
+```{r}
+cont.stat2=NULL
+cont.stat2[bball$free.elig==0 & bball$arb.elig==0] = 1
+cont.stat2[bball$arb.elig==1 & bball$arb==0] = 2
+cont.stat2[bball$arb.elig==1 & bball$arb==1] = 3
+cont.stat2[bball$free.elig==1 & bball$free.agent==0] = 4
+cont.stat2[bball$free.elig==1 & bball$free.agent==1] = 5
+
+#Check if these two ways are equivalent:
+all(as.numeric(cont.stat)==cont.stat2)
+```
+ 
+ Description of `cont.stat` (Contractual Status)
+
++------------------+-------------------------------------------------------+
+|   Level          |         Description                                   |
++==================+=======================================================+
+|      1           |  Not eligible to be a free agent or for arbitration   |
++------------------+-------------------------------------------------------+
+|      2           |  Eligible for arbitration, no arbitration             |
++------------------+-------------------------------------------------------+
+|      3           |  Arbitration                                          |
++------------------+-------------------------------------------------------+
+|      4           |  Eligible to be a free agent, not a free agent        | 
++------------------+-------------------------------------------------------+
+|      5           |  Free Agent                                           |
++------------------+-------------------------------------------------------+
+
+We will now create a plot that color codes by `cont.stat`.  Notice that we created a level of `cont.stat` for every player in the original data set.  So here we need to make sure to only use the `cont.stat` values for the observations that were not considered outliers.  Also notice that as long as we use numbers for the levels of the categorical variable (as we did for `cont.stat`), the color (option `col`) and character (option `pch`) of each point can be specified by these numbers. 
+
+```{r,eval=TRUE,tidy=TRUE}
+plot(bball.lm4$fitted.values,bball.lm4$residuals,col=cont.stat[not_outlier],pch=as.numeric(cont.stat[not_outlier]),xlim=c(4,12))
+legend(9,1,c('Not Elig Free Agent or Arb','Arb Elig No Arb','Arb','Free Agent Elig Not Free Agent','Free Agent'),cex=.7,col=c(1,2,3,4,5),pch=c(1,2,3,4,5))
+
+```
+
+Looking at this plot, we can see that there appear to be some trends with predicted salary, notably in the red triangles. This is a good indication that some interactions might be important. 
+
+To further investigate this possibility, we will include interactions between `rbi` and `runs` with all the contract variables. Interactions can be added to our model by including terms like `var1*var2` in the model formula to include an interaction between `var1` and `var2`.
+
+```{r,eval=TRUE,tidy=TRUE}
+#Model with interactions
+bball.lm5 <- lm(log(salary)~free.elig*runs+free.agent*runs+arb.elig*runs+arb*runs+free.elig*rbi+free.agent*rbi+arb.elig*rbi+arb*rbi,data=bball,subset=not_outlier) 
+summary(bball.lm5)
+```
+
+Of the resulting interactions, only `rbi`-`arb` is significant. But since we know that `runs` and `rbi` are correlated, we might want to investigate removing one or other from the model. To test this idea, we’ll try a series of sequential tests, since the `runs` interactions come before the `rbi` interactions we expect that they will be significant before the `rbi` interactions are included.  The `anova()` function in R will perform sequential tests for each predictor.
+
+```{r,eval=TRUE}
+anova(bball.lm5)
+```
+
+It turns out that our intuition is correct.  When the variables are considered sequentially, the `runs`-`free.agent` and `runs`-`arb.elig` interactions are significant.   For the sake of simplicity we might try removing some interactions from the model. Since `rbi*arb` is always significant, we’ll keep the interactions between contract variables and `rbi` in the model and remove the interactions with `runs`. 
+
+## A Final Model
+
+We have now arrived at a model with `runs`, `rbi`, `free.elig`, `free.agent`, `arb.elig`, `arb`, and interactions between `rbi` and the contract variables.  Let’s have a look at some of our results.
+
+```{r,eval=TRUE,tidy=TRUE}
+#Model with only rbi interactions
+bball.lm6 <- lm(log(salary)~runs+free.elig*rbi+free.agent*rbi+arb.elig*rbi+arb*rbi,data=bball,subset=not_outlier) 
+
+summary(bball.lm6)
+```
+
+First, the R-squared for the regression is 0.84, meaning that 84% of the variability has been explained. This seems pretty good. 
+
+Examining the ANOVA table:
+
+```{r, eval=TRUE}
+anova(bball.lm6)
+```
+
+We could again test that this is doing a better job than just the main effects model. However, since we have some significant interactions, we’ll skip this step (you should work it out on your own). 
+
+Looking at the parameter estimates we see that the interactions with eligibility variables are not significant, but we will leave this for the moment. There do not appear to be further problems with the model (explore if you wish). 
+
+## Interpreting the Final Model
+
+Our parameter estimates are
+
+```{r,eval=TRUE}
+summary(bball.lm6)
+```
+
+Some interesting points on this model:
+
+  - `runs` and `rbi` are both positive, indicating that doing better increases your salary. 
+  -	Here the reference level for all contract variables is `0`.   So for example, the positive coefficient for `free.elig` indicates that being eligible to be a free agent (`free.elig = 1`) increases your log salary by 1.6. 
+  -	Similarly, being eligible for arbitration increases your salary. Interestingly, actually being a free agent or taking arbitration decreases your salary.
+  -	Neither eligibility interacted strongly with `rbi`, the p-values are not significant and the coefficients are relatively small. So being better doesn’t change the boost you get from eligibility status. 
+  -	However, the interaction between performance and taking arbitration or becoming a free agent is significant. Since the effect is for taking these statuses, the positive coefficients suggest that if you do go into arbitration or become a free agent, you salary is improved by doing better. 
+
+
+Finally, remember that we have modeled log(`salary`). In order to get an idea of the size of these effects in dollar terms we recall that the model suggests
+
+
+$Y = e^{\mathbf{X} \boldsymbol{\beta}+\epsilon}=e^{\beta_0}e^{\beta_1 X_1}e^{\beta_2 X_2} \hdots e^{\epsilon}$
+
+So that the effect of increasing $X_1$ by one unit is to multiply $Y$ by $e^{\beta_1}$ . To get a handle on what these changes are like, we need to exponentiate our coefficients. 
+
+```{r,eval=TRUE}
+exp(bball.lm6$coefficients)
+```
+
+By far the largest effects are associated with the contract variables.
+
+  -  If you are eligible to be a free agent, the increase in log(`salary`) is 1.6.  This means  eligibility to be a free agent increases `salary` by a factor of almost 5, a 400% increase!  A similar calculation shows that being eligible for arbitration results in almost a 300% increase in `salary`.
+  -	Actually taking up being a free agent reduces your salary by a factor of .5 , and by .35 by taking up arbitration. 
+  -	The effect of each `rbi` is significantly higher if you take up arbitration.  While each additional `rbi` only increases `salary` by .3% without arbitration, the increase with arbitration is approximately 1.8%, 6 times as much!
+  
+## Note the Effect of our Choices
+
+The choices we have made (leaving out variables etc) all affect the model that we end up with. Try making different choices and see where the model leads you. The great thing about R Markdown is that we now have a record of each choice we made (and why we made it) that can be reproduced in the future.
+
+## A Note on the Ordering of Categorical Values
+
+By default R orders levels of categorical variables alphabetically and chooses the first to be the “reference” level. If you would like to change the reference level, you can re-order the levels of the categorical variable using the `relevel()` function.  Here is an example where we set the reference level for `free.elig` to `1` instead of `0`.
+
+```{r,eval=TRUE}
+bball$free.elig=relevel(bball$free.elig,ref="1")
+```
+
+Now we can re-run the model to see what effect this has on the summary output.
+
+```{r, eval=TRUE,tidy=TRUE}
+bball.lm7 <- lm(log(salary)~runs+free.elig*rbi+free.agent*rbi+arb.elig*rbi+arb*rbi,data=bball,subset=not_outlier) #Model with only rbi interactions
+summary(bball.lm7)
+```
+Note, that all of the variables associated with `free.elig` now have a 0 instead of a 1 after them.  This indicates that the missing level (1) is now the reference level for `free.elig`.
+
+
+
+
+
+

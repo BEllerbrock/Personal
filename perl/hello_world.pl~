@@ -1,0 +1,15 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+
+my $statement = "Hello world \n";
+
+print $statement;
+
+my @numbers = qw/1 2 3 4 5/;
+
+foreach my $number (@numbers) {
+    print $number;
+    print "\n";
+}
